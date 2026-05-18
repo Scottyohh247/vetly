@@ -235,6 +235,14 @@ export default function Results() {
               <Progress value={analysis.confidenceScore} className="h-3" />
             </div>
 
+            {analysis.note && (
+              <Alert variant="warning" className="border-amber-500/40">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>General Notice</AlertTitle>
+                <AlertDescription>{analysis.note}</AlertDescription>
+              </Alert>
+            )}
+
             <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
               <p className="text-slate-100 leading-relaxed">{analysis.summary}</p>
             </div>

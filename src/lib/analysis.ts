@@ -10,9 +10,94 @@ export interface MotAnalysisResult {
   greenFlags: string[];
   suggestedQuestions: string[];
   priceAdjustment: string;
+  note?: string;
 }
 
-const client = new Anthropic();
+function isPlaceholderValue(value: string | undefined): boolean {
+  return !value || value.trim() === '' || value.includes('your_');
+}
+
+function hasValidAnthropicKey(): boolean {
+  return !isPlaceholderValue(process.env.ANTHROPIC_API_KEY);
+}
+
+function analyzeFallback(motData: VehicleMotData): MotAnalysisResult {
+  const tests = motData.motTests.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  let verdict: MotAnalysisResult['verdict'] = 'BUY';
+  const redFlags: string[] = [];
+  const greenFlags: string[] = [];
+  const suggestedQuestions: string[] = [];
+
+  const miles = tests.map((test) => test.mileage);
+  for (let i = 1; i < miles.length; i += 1) {
+    if (miles[i] < miles[i - 1]) {
+      redFlags.push('Mileage appears to rollback between MOT checks.');
+      verdict = 'WALK_AWAY';
+      suggestedQuestions.push('Why does the mileage drop between MOT tests?');
+      break;
+    }
+  }
+
+  const dangerousCount = motData.motTests.reduce((count, test) => count + test.dangerousDefects.length, 0);
+  if (dangerousCount > 0) {
+    redFlags.push('Dangerous defects were recorded in the MOT history.');
+    verdict = 'WALK_AWAY';
+    suggestedQuestions.push('Has the vehicle been inspected for dangerous defects since the last MOT?');
+  }
+
+  const majorCount = motData.motTests.reduce((count, test) => count + test.majorDefects.length, 0);
+  if (verdict !== 'WALK_AWAY' && majorCount > 0) {
+    redFlags.push('Major defects were found in previous MOTs.');
+    verdict = 'CAUTION';
+    suggestedQuestions.push('Have the major issues listed on the MOT been repaired properly?');
+  }
+
+  const rustWarnings = motData.motTests.flatMap((test) =>
+    [...test.advisories, ...test.minorDefects, ...test.majorDefects].filter((item) =>
+      /sill|subframe|chassis|jacking point|corroded|rust/i.test(item.text)
+    )
+  );
+  if (rustWarnings.length > 0) {
+    redFlags.push('Rust or corrosion concerns appear in the MOT history.');
+    if (verdict !== 'WALK_AWAY') verdict = 'CAUTION';
+    suggestedQuestions.push('Can you show evidence that rust has been professionally assessed and repaired?');
+  }
+
+  if (verdict === 'BUY') {
+    greenFlags.push('No major or dangerous defects found in the recorded MOT history.');
+    greenFlags.push('All sample MOTs are present and mostly passing.');
+  }
+
+  if (redFlags.length === 0 && greenFlags.length === 0) {
+    greenFlags.push('The MOT history appears clean for the sample data.');
+  }
+
+  const priceAdjustment =
+    verdict === 'BUY'
+      ? 'Market value appears reasonable; no large deductions indicated by MOT history.'
+      : verdict === 'CAUTION'
+      ? 'Consider a moderate price reduction to cover potential repairs and inspections.'
+      : 'Significant price reduction advised or avoid purchase until issues are resolved.';
+
+  return {
+    verdict,
+    confidenceScore: verdict === 'BUY' ? 82 : verdict === 'CAUTION' ? 66 : 48,
+    summary:
+      verdict === 'BUY'
+        ? 'The MOT history shows mostly normal wear and no immediate deal-breakers in the available records.'
+        : verdict === 'CAUTION'
+        ? 'There are some concerns in the MOT history worth verifying before purchase.'
+        : 'The history contains serious red flags that suggest you should walk away unless everything is fixed.',
+    keyFindings: [...new Set([...redFlags, ...greenFlags])],
+    redFlags,
+    greenFlags,
+    suggestedQuestions,
+    priceAdjustment,
+    note: 'Analysis is generated locally because Anthropic is not configured or the API key is unavailable.',
+  };
+}
+
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const SYSTEM_PROMPT = `You are an expert UK vehicle inspector with 20+ years of experience evaluating used vehicles based on MOT history. Your role is to analyze MOT records and provide clear, actionable verdicts for buyers considering a purchase.
 
@@ -36,39 +121,44 @@ TONE: Trustworthy, expert, direct. Don't be overly cautious—minor advisories o
 Return ONLY valid JSON, no markdown, no extra text.`;
 
 export async function analyseMotHistory(motData: VehicleMotData): Promise<MotAnalysisResult> {
+  if (!hasValidAnthropicKey()) {
+    return analyzeFallback(motData);
+  }
+
   const motSummary = formatMotDataForAnalysis(motData);
 
-  const message = await client.messages.create({
-    model: 'claude-3-5-sonnet-20241022',
-    max_tokens: 1024,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content: `Analyze this vehicle's MOT history and provide a structured JSON response:\n\n${motSummary}`,
-      },
-    ],
-  });
-
-  // Extract the text content
-  const content = message.content[0];
-  if (content.type !== 'text') {
-    throw new Error('Unexpected response type from Claude');
-  }
-
-  // Parse the JSON response
-  let result: MotAnalysisResult;
   try {
-    result = JSON.parse(content.text);
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1024,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: `Analyze this vehicle's MOT history and provide a structured JSON response:\n\n${motSummary}`,
+        },
+      ],
+    });
+
+    const content = message.content[0];
+    if (content.type !== 'text') {
+      throw new Error('Unexpected response type from Claude');
+    }
+
+    let result: MotAnalysisResult;
+    try {
+      result = JSON.parse(content.text);
+    } catch (error) {
+      console.error('Failed to parse Claude response:', content.text);
+      return analyzeFallback(motData);
+    }
+
+    validateAnalysisResult(result);
+    return result;
   } catch (error) {
-    console.error('Failed to parse Claude response:', content.text);
-    throw new Error('Failed to parse analysis result');
+    console.error('Anthropic analysis failed, falling back to local analysis:', error);
+    return analyzeFallback(motData);
   }
-
-  // Validate the result
-  validateAnalysisResult(result);
-
-  return result;
 }
 
 function formatMotDataForAnalysis(motData: VehicleMotData): string {
