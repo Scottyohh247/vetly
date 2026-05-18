@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { checkVehicle, CheckVehicleResponse } from '@/app/actions';
@@ -23,6 +23,14 @@ import { VehicleMotData } from '@/lib/mock-data';
 import { MotAnalysisResult } from '@/lib/analysis';
 
 export default function Results() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ResultsContent />
+    </Suspense>
+  );
+}
+
+function ResultsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const reg = searchParams.get('reg');
@@ -81,7 +89,6 @@ export default function Results() {
       savedAt: new Date().toISOString(),
     };
 
-    // Check if already saved
     const exists = shortlist.some((item: (typeof entry)) => item.reg === motData.registrationNumber);
     if (!exists) {
       shortlist.push(entry);
@@ -191,7 +198,6 @@ export default function Results() {
           </Button>
         </Link>
 
-        {/* Vehicle Header */}
         <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -211,7 +217,6 @@ export default function Results() {
           </div>
         </div>
 
-        {/* Verdict Section */}
         <Card className="bg-slate-900 border-slate-800 mb-8">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -249,9 +254,7 @@ export default function Results() {
           </CardContent>
         </Card>
 
-        {/* Flags and Questions Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {/* Red Flags */}
           <Card className="bg-slate-900 border-slate-800">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
@@ -275,7 +278,6 @@ export default function Results() {
             </CardContent>
           </Card>
 
-          {/* Green Flags */}
           <Card className="bg-slate-900 border-slate-800">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
@@ -299,7 +301,6 @@ export default function Results() {
             </CardContent>
           </Card>
 
-          {/* Questions */}
           <Card className="bg-slate-900 border-slate-800">
             <CardHeader>
               <CardTitle className="text-white">Questions to Ask</CardTitle>
@@ -321,7 +322,6 @@ export default function Results() {
           </Card>
         </div>
 
-        {/* Price Adjustment */}
         <Card className="bg-slate-900 border-slate-800 mb-8">
           <CardHeader>
             <CardTitle className="text-white">Price Adjustment Guide</CardTitle>
@@ -334,7 +334,6 @@ export default function Results() {
           </CardContent>
         </Card>
 
-        {/* Full MOT History */}
         <Card className="bg-slate-900 border-slate-800 mb-8">
           <CardHeader>
             <CardTitle className="text-white">Full MOT History</CardTitle>
@@ -432,7 +431,6 @@ export default function Results() {
           </CardContent>
         </Card>
 
-        {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
           <Button onClick={handleCheckAnother} variant="primary" size="lg">
             Check Another Vehicle
