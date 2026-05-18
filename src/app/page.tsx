@@ -79,7 +79,6 @@ export default function Home() {
                   setError('');
                 }}
                 className="flex-1 bg-slate-800 border-slate-700 text-white placeholder:text-slate-400 focus-visible:ring-emerald-500"
-                autoFocus
               />
               <Button
                 type="submit"
