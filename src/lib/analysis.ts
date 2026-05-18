@@ -124,6 +124,12 @@ export async function analyseMotHistory(motData: VehicleMotData): Promise<MotAna
   }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  console.log('API Key check:', {
+    hasKey: !!process.env.ANTHROPIC_API_KEY,
+    keyLength: process.env.ANTHROPIC_API_KEY?.length,
+    keyStart: process.env.ANTHROPIC_API_KEY?.substring(0, 10),
+    isValid: hasValidAnthropicKey(),
+  });
   const motSummary = formatMotDataForAnalysis(motData);
 
   try {
