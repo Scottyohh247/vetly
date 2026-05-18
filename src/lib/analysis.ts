@@ -97,8 +97,6 @@ function analyzeFallback(motData: VehicleMotData): MotAnalysisResult {
   };
 }
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
 const SYSTEM_PROMPT = `You are an expert UK vehicle inspector with 20+ years of experience evaluating used vehicles based on MOT history. Your role is to analyze MOT records and provide clear, actionable verdicts for buyers considering a purchase.
 
 CRITICAL ISSUES TO DETECT:
@@ -125,6 +123,7 @@ export async function analyseMotHistory(motData: VehicleMotData): Promise<MotAna
     return analyzeFallback(motData);
   }
 
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const motSummary = formatMotDataForAnalysis(motData);
 
   try {
