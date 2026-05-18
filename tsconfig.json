@@ -9,7 +9,6 @@
     ],
     "module": "ESNext",
     "skipLibCheck": true,
-    "ignoreDeprecations": "6.0",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "moduleResolution": "bundler",
